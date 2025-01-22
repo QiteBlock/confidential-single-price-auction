@@ -1,66 +1,50 @@
-# Hardhat Template [![Open in Gitpod][gitpod-badge]][gitpod] [![Github Actions][gha-badge]][gha] [![Hardhat][hardhat-badge]][hardhat] [![License: MIT][license-badge]][license]
+# Confidential Single-Price Auction
 
-[gitpod]: https://gitpod.io/#https://github.com/zama-ai/fhevm-hardhat-template
-[gitpod-badge]: https://img.shields.io/badge/Gitpod-Open%20in%20Gitpod-FFB45B?logo=gitpod
-[gha]: https://github.com/zama-ai/fhevm-hardhat-template/actions
-[gha-badge]: https://github.com/zama-ai/fhevm-hardhat-template/actions/workflows/ci.yml/badge.svg
-[hardhat]: https://hardhat.org/
-[hardhat-badge]: https://img.shields.io/badge/Built%20with-Hardhat-FFDB1C.svg
-[license]: https://opensource.org/licenses/MIT
-[license-badge]: https://img.shields.io/badge/License-MIT-blue.svg
+The **PrivateSinglePriceAuction** contract is a decentralized auction mechanism that facilitates encrypted bidding for a single-price auction using Fully Homomorphic Encryption (FHE) via the Zama FHEVM. The **AuctionFactory** contract enables the creation and management of multiple auction instances, streamlining deployment and participant management.
 
-A Hardhat-based template for developing Solidity smart contracts, with sensible defaults.
-
-- [Hardhat](https://github.com/nomiclabs/hardhat): compile, run and test smart contracts
-- [TypeChain](https://github.com/ethereum-ts/TypeChain): generate TypeScript bindings for smart contracts
-- [Ethers](https://github.com/ethers-io/ethers.js/): renowned Ethereum library and wallet implementation
-- [Solhint](https://github.com/protofire/solhint): code linter
-- [Solcover](https://github.com/sc-forks/solidity-coverage): code coverage
-- [Prettier Plugin Solidity](https://github.com/prettier-solidity/prettier-plugin-solidity): code formatter
-
-## Getting Started
-
-Click the [`Use this template`](https://github.com/zama-ai/fhevm-hardhat-template/generate) button at the top of the
-page to create a new repository with this repo as the initial state.
+---
 
 ## Features
 
-This template builds upon the frameworks and libraries mentioned above, so for details about their specific features,
-please consult their respective documentations.
+### AuctionFactory
+- **Automated Auction Deployment**: Deploys new auction contracts with specified parameters.
+- **Centralized Management**: Keeps track of all deployed auctions.
+- **Participant Access**: Provides access to all auction instances.
 
-For example, for Hardhat, you can refer to the [Hardhat Tutorial](https://hardhat.org/tutorial) and the
-[Hardhat Docs](https://hardhat.org/docs). You might be in particular interested in reading the
-[Testing Contracts](https://hardhat.org/tutorial/testing-contracts) section.
+### PrivateSinglePriceAuction
+- **Encrypted Bidding**: Participants place encrypted bids for privacy.
+- **Single-Price Settlement**: Final settlement price is the lowest winning bid.
+- **Funds Locking**: Ensures sufficient funds are locked for valid bids.
+- **Winner Allocation**: Distributes tokens to winners proportionally to their bids.
+- **Automated Fund Management**:
+  - Transfers payments to the auction owner.
+  - Refunds unused funds to participants.
+  - Returns unsold assets to the owner.
 
-### Sensible Defaults
 
-This template comes with sensible default configurations in the following files:
+---
 
-```text
-├── .editorconfig
-├── .eslintignore
-├── .eslintrc.yml
-├── .gitignore
-├── .prettierignore
-├── .prettierrc.yml
-├── .solcover.js
-├── .solhint.json
-└── hardhat.config.ts
-```
+## Table of Contents
+- [Installation](#installation)
+- [Usage](#usage)
+  - [AuctionFactory](#auctionfactory)
+  - [PrivateSinglePriceAuction](#privatesinglepriceauction)
+- [Workflow](#workflow)
+- [Security Considerations](#security-considerations)
+- [License](#license)
 
-### VSCode Integration
+---
 
-This template is IDE agnostic, but for the best user experience, you may want to use it in VSCode alongside Nomic
-Foundation's [Solidity extension](https://marketplace.visualstudio.com/items?itemName=NomicFoundation.hardhat-solidity).
+## Installation
 
-### GitHub Actions
+1. Clone this repository.
+2. Install dependencies:
+   ```bash
+   npm install @openzeppelin/contracts
+   ```
+3. Ensure FHEVM and related configurations are correctly set up.
 
-This template comes with GitHub Actions pre-configured. Your contracts will be linted and tested on every push and pull
-request made to the `main` branch.
-
-Note though that to make this work, you must use your `INFURA_API_KEY` and your `MNEMONIC` as GitHub secrets.
-
-You can edit the CI script in [.github/workflows/ci.yml](./.github/workflows/ci.yml).
+---
 
 ## Usage
 
@@ -183,11 +167,6 @@ Another faster way to test the coprocessor on Sepolia is to simply run the follo
 ```
 pnpm deploy-sepolia
 ```
-This would automatically deploy an instance of the `MyConfidentialERC20` example contract on Sepolia. You could then use this other command to mint some amount of confidential tokens: 
-```
-pnpm mint-sepolia
-```
-
 ### Etherscan verification
 
 If you are using a real instance of the fhEVM, you can verify your deployed contracts on the Etherscan explorer. 
@@ -204,11 +183,182 @@ npx hardhat verify-deployed --address [CONFIDENTIAL_ERC20_ADDRESS] --contract co
 
 Note that you should replace the address placeholder `[CONFIDENTIAL_ERC20_ADDRESS]` by the concrete address that is logged when you run the `pnpm deploy-sepolia` deployment script.
 
-### Syntax Highlighting
+## Detailed Usage
 
-If you use VSCode, you can get Solidity syntax highlighting with the
-[hardhat-solidity](https://marketplace.visualstudio.com/items?itemName=NomicFoundation.hardhat-solidity) extension.
+### AuctionFactory
+
+#### Deployment
+Deploy the AuctionFactory contract. The factory will act as a central point for deploying and managing auctions.
+
+```
+pnpm deploy-sepolia
+```
+
+#### Creating a New Auction
+To create a new auction, call:
+```solidity
+function createAuction(
+    address _asset,
+    address _paymentToken,
+    uint256 _quantity,
+    uint256 _duration,
+    uint256 _maxParticipant
+) external;
+```
+- `_asset`: Address of the ERC20 token being auctioned.
+- `_paymentToken`: Address of the ERC20 token for payments (use `address(0)` for Ether).
+- `_quantity`: Total quantity of tokens to be auctioned.
+- `_duration`: Duration of the auction in seconds.
+- `_maxParticipant`: Maximum number of participants allowed.
+
+The function returns the address of the deployed **PrivateSinglePriceAuction** contract.
+
+#### Fetching All Auctions
+Retrieve all deployed auctions:
+```solidity
+function getAllAuctions() external view returns (address[] memory);
+```
+
+### Task to run 
+
+```
+npx hardhat createAuction --auction-factory-contract [AUCTION_FACTORY_ADDRESS] --asset-contract [ASSET_ADDRESS] --quantity [QUANTITY] --duration [DURATION] --max-participant [MAX_PARTICIPANT] --payment-token [PAYMENT_TOKEN] --network sepolia
+```
+
+### PrivateSinglePriceAuction
+
+#### Constructor Parameters
+The auction contract is initialized by the factory with the following parameters:
+- `address _owner`: Owner of the contract.
+- `address _asset`: ERC20 token being auctioned.
+- `address _paymentToken`: Token used for payment.
+- `uint256 _quantity`: Total quantity of tokens in the auction.
+- `uint256 _duration`: Duration of the auction in seconds.
+- `uint256 _maxParticipant`: Maximum number of participants.
+
+#### Core Functions
+
+1. **Locking Funds**:
+   ```solidity
+   function lockFunds(uint256 amount) external payable;
+   ```
+   - Locks Ether or tokens for bidding.
+   - Ensures bid validity.
+
+2. **Placing Encrypted Bids**:
+   ```solidity
+   function placeEncryptedBid(
+       einput _encryptedQuantity,
+       einput _encryptedPrice,
+       bytes calldata _inputProof
+   ) external payable;
+   ```
+   - Participants submit encrypted bids with encryption proofs.
+
+3. **Settling the Auction**:
+   ```solidity
+   function settleAuction() external onlyOwner;
+   ```
+   - Finalizes the auction, decrypts bids, determines winners, and allocates tokens.
+
+4. **Retrieving Bids**:
+   - Encrypted bids:
+     ```solidity
+     function getAllBids() external view returns (EncryptedBid[] memory);
+     ```
+   - Decrypted bids:
+     ```solidity
+     function getAllDecryptedBids() external view returns (DecryptedBid[] memory);
+     ```
+
+### Task to run 
+
+This task will run a full bidding example with 3 participants and using ERC20. 
+
+```
+npx hardhat bid --auction-contract [AUCTION_ADDRESS] --payment-token [PAYMENT_TOKEN_ADDRESS] --network sepolia
+```
+
+This task will end the auction. 
+
+```
+npx hardhat endAuction --auction-contract [AUCTION_ADDRESS] --network sepolia
+```
+
+---
+
+## Workflow
+
+1. **Deploy AuctionFactory**: Deploy the factory contract to manage auctions.
+2. **Create Auction**: Use the factory to deploy a new auction instance with the desired parameters.
+3. **Participants Lock Funds**: Bidders lock funds in the auction contract.
+4. **Place Encrypted Bids**: Bidders submit encrypted bids using their locked funds.
+5. **Settle Auction**: The auction owner finalizes the auction, allocating tokens to winners and refunding unused funds.
+
+---
+
+## Security Considerations
+
+1. **Reentrancy**:
+   - Both the AuctionFactory and PrivateSinglePriceAuction contracts are protected using `ReentrancyGuard`.
+2. **Bid Privacy**:
+   - Ensures confidentiality with Zama's Fully Homomorphic Encryption.
+3. **Locked Funds**:
+   - Guarantees that participants have sufficient funds to honor their bids.
+
+---
+## Screenshots 
+
+Tests : 
+
+![Test result](./screenshots/test.png)
+
+Coverage : 
+
+![Coverage result](./screenshots/coverage.png)
+
+Deployment on Sepolia :
+
+![Deployment on Sepolia result](./screenshots/deploy-task.png)
+
+Create a new auction :
+
+![Create a new auction result](./screenshots/create-auction.png)
+
+Place an encrypted bid :
+
+![Place an encrypted bid result](./screenshots/encrypted-bid.png)
+
+End Auction : 
+
+![End Auction result](./screenshots/end-auction.png)
+
+## Example
+
+In this example an owner (0x330f2E60A42351dd3dEaC65067fA62A77158F996) created an auction with 100 Asset Token to sell. 
+
+We have 3 bids from 3 wallets. 
+
+The first bidder (0xBe0F7C213A37f5d48f515490713c3E9378AA2e7C) locks 50 payment tokens. He bids 30 Asset Token for 1 Payment Token. 
+
+The second bidder (0x3ebBaCeEF5A47d6490abD020C290AFB3859aF3CE) locks 1000 payment tokens. He bids 800 tokens for 1 Payment Token. 
+
+The third bidder (0xbFfbDb552dF07651ba0B000dA372BA597d0448d0) locks 250 payment tokens. He bids 80 tokens for 3 Payment Token. 
+
+So clearly, the third bidder bid the most. Then he is selected and he can get 80 token. After we have the first bidder which will receive 20 token. And the settlement price is 1 because it's the minimum between 3 and 1. So the owner of the auction will receive 100 payment token. And of course, all the funds that was locked will be redistributed to bidders. 
+
+Final Result with funds distributed and refunded : 
+0x13f448583c4d3235ba9343121ba2e2cc173be48fdbc61172487f9430e992930e
+
+![Final result](./screenshots/etherscan-distribute-funds.png)
+
+## Possible upgrades
+
+- Funds that are locked in the contract. People can retrieve this information. So it's a leak of information as we know that a bidder didn't bid more than this value. (A possible upgrade that we can do later is to lock in a central contract. And we can hide the information about which funds belongs to which auction. And when verifying we can call a function from this smart contract to check if the bidder has enough funds)
+- Limitation on the number of participants. We can have a denial of service error if there are too many participants. (Possible upgrade. Treat all that by batches)
+
 
 ## License
 
-This project is licensed under MIT.
+This project is licensed under the GPL-3.0 License. See the LICENSE file for details.
+

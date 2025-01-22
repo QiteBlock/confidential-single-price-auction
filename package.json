@@ -1,13 +1,13 @@
 {
-  "name": "@zama-ai/fhevm-hardhat-template",
-  "description": "fhEVM hardhat template",
+  "name": "confidential-single-price-auction",
+  "description": "Confidential Single-Price Auction",
   "version": "1.0.0",
   "engines": {
     "node": ">=20.0.0"
   },
   "author": {
-    "name": "zama-ai",
-    "url": "https://github.com/zama-ai"
+    "name": "Qiteblock",
+    "url": "https://github.com/QiteBlock"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
@@ -90,8 +90,7 @@
     "typechain": "cross-env TS_NODE_TRANSPILE_ONLY=true hardhat typechain",
     "test": "hardhat test --network hardhat",
     "coverage": "hardhat coverage",
-    "deploy-sepolia": "hardhat deploy --network sepolia",
-    "mint-sepolia": "hardhat mint --amount 42 --network sepolia"
+    "deploy-sepolia": "hardhat deploy --network sepolia"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.0.2"
