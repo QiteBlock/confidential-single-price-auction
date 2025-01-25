@@ -90,12 +90,13 @@ describe("AuctionFactory and PrivateSinglePriceAuction with ETH", function () {
       input.add256(price);
       const encryptedAmount = await input.encrypt();
 
-      const tx = await this.privateAuction.connect(this.bidder1)["placeEncryptedBid(bytes32,bytes32,bytes)"](
-        encryptedAmount.handles[0],
-        encryptedAmount.handles[1],
-        encryptedAmount.inputProof,
-        { value: ethers.parseEther("30") }, // Bidder locks ETH
-      );
+      const tx = await this.privateAuction
+        .connect(this.bidder1)
+        ["placeEncryptedBid(bytes32,bytes32,bytes)"](
+          encryptedAmount.handles[0],
+          encryptedAmount.handles[1],
+          encryptedAmount.inputProof,
+        );
       const t2 = await tx.wait();
       expect(t2?.status).to.eq(1);
 
@@ -133,7 +134,6 @@ describe("AuctionFactory and PrivateSinglePriceAuction with ETH", function () {
           encryptedAmount.handles[0],
           encryptedAmount.handles[1],
           encryptedAmount.inputProof,
-          { value: ethers.parseEther("600") },
         );
       const t2 = await tx.wait();
       expect(t2?.status).to.eq(1);
@@ -180,7 +180,6 @@ describe("AuctionFactory and PrivateSinglePriceAuction with ETH", function () {
           encryptedAmount.handles[0],
           encryptedAmount.handles[1],
           encryptedAmount.inputProof,
-          { value: ethers.parseEther("800") },
         );
       const t2 = await tx.wait();
       expect(t2?.status).to.eq(1);
@@ -227,7 +226,6 @@ describe("AuctionFactory and PrivateSinglePriceAuction with ETH", function () {
           encryptedAmount.handles[0],
           encryptedAmount.handles[1],
           encryptedAmount.inputProof,
-          { value: ethers.parseEther("240") },
         );
       const t2 = await tx.wait();
       expect(t2?.status).to.eq(1);
@@ -351,12 +349,13 @@ describe("AuctionFactory and PrivateSinglePriceAuction with ETH", function () {
       input.add256(price);
       const encryptedAmount = await input.encrypt();
 
-      const tx = await this.privateAuction.connect(this.bidder1)["placeEncryptedBid(bytes32,bytes32,bytes)"](
-        encryptedAmount.handles[0],
-        encryptedAmount.handles[1],
-        encryptedAmount.inputProof,
-        { value: ethers.parseEther("1") }, // Bidder locks ETH
-      );
+      const tx = await this.privateAuction
+        .connect(this.bidder1)
+        ["placeEncryptedBid(bytes32,bytes32,bytes)"](
+          encryptedAmount.handles[0],
+          encryptedAmount.handles[1],
+          encryptedAmount.inputProof,
+        );
       const t2 = await tx.wait();
       expect(t2?.status).to.eq(1);
 
@@ -394,7 +393,6 @@ describe("AuctionFactory and PrivateSinglePriceAuction with ETH", function () {
           encryptedAmount.handles[0],
           encryptedAmount.handles[1],
           encryptedAmount.inputProof,
-          { value: ethers.parseEther("1") },
         );
       const t2 = await tx.wait();
       expect(t2?.status).to.eq(1);
@@ -441,7 +439,6 @@ describe("AuctionFactory and PrivateSinglePriceAuction with ETH", function () {
           encryptedAmount.handles[0],
           encryptedAmount.handles[1],
           encryptedAmount.inputProof,
-          { value: ethers.parseEther("4.8") },
         );
       const t2 = await tx.wait();
       expect(t2?.status).to.eq(1);
@@ -488,7 +485,6 @@ describe("AuctionFactory and PrivateSinglePriceAuction with ETH", function () {
           encryptedAmount.handles[0],
           encryptedAmount.handles[1],
           encryptedAmount.inputProof,
-          { value: ethers.parseEther("0.00001") },
         );
       const t2 = await tx.wait();
       expect(t2?.status).to.eq(1);
