@@ -15,7 +15,7 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
     uint256 public quantity; // Total quantity of tokens being auctioned
     uint256 public startTime; // Start time of the auction
     uint256 public endTime; // End time of the auction
-    uint256 public maxParticipant;
+    uint256 public maxParticipant; // Maximum number of participants
 
     struct EncryptedBid {
         address bidder;
@@ -31,6 +31,7 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
 
     EncryptedBid[] public bids; // List of all encrypted bids
     DecryptedBid[] public decryptedBids; // List of all decrypted bids
+    DecryptedBid[] public finalWinners; // List of all winners bids
     uint256[] public requestIds; // List of request IDs for decryption
     uint256 public settlementPrice = 0; // Final settlement price
     mapping(uint256 => bool) public isDecrypted; // Tracks decryption status of bids
@@ -42,19 +43,36 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
     event AuctionCreated(address indexed asset, address indexed paymentToken, uint256 quantity);
     event EncryptedBidPlaced(address indexed bidder, euint256 quantity, euint256 price);
     event AuctionSettled(euint256 settlementPrice);
+    event DecryptionRequested(uint256 indexed requestId, address indexed bidder);
+    event DecryptionCompleted(uint256 indexed requestId, address indexed bidder, uint256 quantity, uint256 price);
 
+    // Custom errors for gas-efficient error handling
+    error AuctionNotActive(); // Thrown when auction is not in active state
+    error AuctionStillActive(); // Thrown when auction hasn't ended yet
+    error NotOwner(); // Thrown when caller is not the auction owner
+    error AuctionAlreadySettled(); // Thrown when trying to settle an already settled auction
+    error ZeroAmount(); // Thrown when attempting to lock zero funds
+    error EtherAmountMismatch(); // Thrown when sent ETH doesn't match specified amount
+    error ERC20TransferFailed(); // Thrown when ERC20 token transfer fails
+    error AlreadyDecrypted(); // Thrown when bid is already decrypted
+    error InvalidParams(); // Thrown when decryption parameters are invalid
+    error TransferToOwnerFailed(); // Thrown when transfer to owner fails
+    error DistributeAssetsFailed(); // Thrown when asset distribution fails
+    error EtherRefundFailed(); // Thrown when ETH refund fails
+    error RefundAssetsFailed(); // Thrown when asset refund fails
+    error NotAllDecrypted(); // Thrown when not all bids are decrypted
     modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner can call this");
+        if (msg.sender != owner) revert NotOwner();
         _;
     }
 
     modifier activeAuction() {
-        require(block.timestamp >= startTime && block.timestamp <= endTime, "Auction is not active");
+        if (block.timestamp < startTime || block.timestamp > endTime) revert AuctionNotActive();
         _;
     }
 
     modifier auctionEnded() {
-        require(block.timestamp > endTime, "Auction is still active");
+        if (block.timestamp <= endTime) revert AuctionStillActive();
         _;
     }
 
@@ -92,42 +110,34 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
         return true;
     }
 
-    /// @notice Public function to place a bid
-    /// @param encryptedQuantity Encrypted quantity of tokens bid
-    /// @param encryptedPrice Encrypted price per token bid
+    /// @notice Places an encrypted bid with verification
+    /// @param encryptedQuantity The encrypted amount of tokens to bid for
+    /// @param encryptedPrice The encrypted price per token
     function placeBid(euint256 encryptedQuantity, euint256 encryptedPrice) public payable activeAuction {
         uint256 length = bids.length;
-        require(!hasParticipated[msg.sender], "Already placed a bid");
-        require(length <= maxParticipant, "Max participant reached");
-        // Calculate total bid amount in payment token's precision
+        require(!hasParticipated[msg.sender] && length <= maxParticipant, "Invalid bid");
+
+        // Convert bid to payment token precision and verify sufficient locked funds
         euint256 totalBids = TFHE.mul(encryptedPrice, encryptedQuantity);
-        uint decimals = paymentToken == address(0) ? 18 : ERC20(paymentToken).decimals();
+        uint256 decimals = paymentToken == address(0) ? 18 : ERC20(paymentToken).decimals();
         euint256 totalBidsSamePrecision = TFHE.div(totalBids, 10 ** decimals);
 
-        // Verify if the user has locked sufficient funds
+        // Check if user has locked enough funds (in encrypted space)
         ebool isLockFundsGreater = TFHE.ge(TFHE.asEuint256(lockedFunds[msg.sender]), totalBidsSamePrecision);
-        if (paymentToken == address(0)) {
-            isLockFundsGreater = TFHE.and(
-                TFHE.eq(totalBidsSamePrecision, TFHE.asEuint256(msg.value)),
-                isLockFundsGreater
-            );
-        }
 
-        // Store final bid values based on sufficient funds
+        // If insufficient funds, bid quantities are set to 0 while maintaining privacy
         euint256 finalEncryptedQuantity = TFHE.select(isLockFundsGreater, encryptedQuantity, TFHE.asEuint256(0));
         euint256 finalEncryptedPrice = TFHE.select(isLockFundsGreater, encryptedPrice, TFHE.asEuint256(0));
 
-        // Record the bid
-        bids.push(
-            EncryptedBid({
-                bidder: msg.sender,
-                encryptedQuantity: finalEncryptedQuantity,
-                encryptedPrice: finalEncryptedPrice
-            })
-        );
+        // Store the bid
+        EncryptedBid storage newBid = bids.push();
+        newBid.bidder = msg.sender;
+        newBid.encryptedQuantity = finalEncryptedQuantity;
+        newBid.encryptedPrice = finalEncryptedPrice;
+
         hasParticipated[msg.sender] = true;
 
-        // Approve TFHE for decryption
+        // Grant necessary TFHE permissions for later decryption
         TFHE.allowThis(bids[length].encryptedQuantity);
         TFHE.allowThis(bids[length].encryptedPrice);
         TFHE.allow(bids[length].encryptedQuantity, msg.sender);
@@ -136,27 +146,74 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
         emit EncryptedBidPlaced(msg.sender, finalEncryptedQuantity, finalEncryptedPrice);
     }
 
-    function distributeFunds() internal nonReentrant {
-        uint256 totalAmountPaid = 0;
-        uint256 remainingQuantity = quantity;
+    /// @notice Distributes funds and assets after auction settlement
+    /// @dev Processes winner payments, transfers assets, and handles refunds
+    function internalDistributeFunds() internal nonReentrant {
+        uint256 totalAmountPaid;
+        uint256 decimals = paymentToken == address(0) ? 18 : ERC20(paymentToken).decimals();
 
-        DecryptedBid[] memory sortedBids = sortBidsByPriceDescending();
-        DecryptedBid[] memory winners = allocateWinners(sortedBids, remainingQuantity);
+        // Sort bids and determine winners
+        DecryptedBid[] memory winners = allocateWinners(sortBidsByPriceDescending(), quantity);
+        for (uint256 i = 0; i < winners.length; i++) {
+            finalWinners.push(winners[i]);
+        }
+        // Process payments and distribute assets to winners
+        for (uint256 i = 0; i < winners.length; i++) {
+            address bidder = winners[i].bidder;
+            if (bidder != address(0)) {
+                uint256 payableAmount = (winners[i].quantity * settlementPrice) / 10 ** decimals;
+                lockedFunds[bidder] -= payableAmount;
+                totalAmountPaid += payableAmount;
 
-        totalAmountPaid = processPayments(winners);
-        transferFundsToOwner(totalAmountPaid);
-        distributeAssetsToWinners(winners);
-        refundLockedFunds();
-        refundUnsoldAssets();
+                if (!ERC20(asset).transfer(bidder, winners[i].quantity)) revert DistributeAssetsFailed();
+            }
+        }
+
+        // Transfer collected funds to auction owner
+        if (paymentToken == address(0)) {
+            (bool success, ) = owner.call{ value: totalAmountPaid }("");
+            if (!success) revert TransferToOwnerFailed();
+        } else {
+            if (!ERC20(paymentToken).transfer(owner, totalAmountPaid)) revert TransferToOwnerFailed();
+        }
+
+        _processRefunds();
     }
 
+    /// @notice Processes refunds for unused locked funds and unsold assets
+    /// @dev Returns excess funds to participants and unsold assets to owner
+    function _processRefunds() private {
+        // Refund excess locked funds to participants
+        for (uint256 i = 0; i < lockedParticipant.length; i++) {
+            address participant = lockedParticipant[i];
+            uint256 refundAmount = lockedFunds[participant];
+            if (refundAmount > 0) {
+                lockedFunds[participant] = 0;
+                if (paymentToken == address(0)) {
+                    (bool success, ) = participant.call{ value: refundAmount }("");
+                    if (!success) revert EtherRefundFailed();
+                } else {
+                    if (!ERC20(paymentToken).transfer(participant, refundAmount)) revert ERC20TransferFailed();
+                }
+            }
+        }
+
+        // Return any unsold assets to the auction owner
+        uint256 unsoldAssets = ERC20(asset).balanceOf(address(this));
+        if (unsoldAssets > 0) {
+            if (!ERC20(asset).transfer(owner, unsoldAssets)) revert RefundAssetsFailed();
+        }
+    }
+
+    /// @notice Sorts decrypted bids by price in descending order
+    /// @dev Maintains bid order consistency with original encrypted bids
+    /// @return Sorted array of DecryptedBid structs
     function sortBidsByPriceDescending() private view returns (DecryptedBid[] memory) {
         uint256 n = decryptedBids.length;
         DecryptedBid[] memory sortedBids = new DecryptedBid[](n);
 
-        // Reorder decryptedBids to match the order in bids
+        // First match decrypted bids with their original encrypted order
         for (uint256 i = 0; i < n; i++) {
-            // Find the corresponding decrypted bid for the current encrypted bid
             for (uint256 j = 0; j < n; j++) {
                 if (decryptedBids[j].bidder == bids[i].bidder) {
                     sortedBids[i] = decryptedBids[j];
@@ -165,6 +222,7 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
             }
         }
 
+        // Sort by price using bubble sort
         for (uint256 i = 0; i < n - 1; i++) {
             for (uint256 j = 0; j < n - i - 1; j++) {
                 if (sortedBids[j].price < sortedBids[j + 1].price) {
@@ -194,7 +252,11 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
 
             sortedBids[i].quantity = allocatedQuantity;
             winners[i] = sortedBids[i];
-            remainingQuantity -= allocatedQuantity;
+
+            unchecked {
+                remainingQuantity -= allocatedQuantity;
+            }
+
             if (remainingQuantity == 0 || i == n - 1) {
                 settlementPrice = winners[i].price;
             }
@@ -202,59 +264,9 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
         return winners;
     }
 
-    function processPayments(DecryptedBid[] memory winners) private returns (uint256 totalAmountPaid) {
-        uint256 decimals = paymentToken == address(0) ? 18 : ERC20(paymentToken).decimals();
-
-        for (uint256 i = 0; i < winners.length; i++) {
-            if (winners[i].bidder != address(0)) {
-                uint256 payableAmount = (winners[i].quantity * settlementPrice) / 10 ** decimals;
-                lockedFunds[winners[i].bidder] -= payableAmount;
-                totalAmountPaid += payableAmount;
-            }
-        }
-    }
-
-    function transferFundsToOwner(uint256 totalAmountPaid) private {
-        if (paymentToken == address(0)) {
-            (bool success, ) = owner.call{ value: totalAmountPaid }("");
-            require(success, "Transfer to owner failed");
-        } else {
-            require(ERC20(paymentToken).transfer(owner, totalAmountPaid), "Transfer to owner failed");
-        }
-    }
-
-    function distributeAssetsToWinners(DecryptedBid[] memory winners) private {
-        for (uint256 i = 0; i < winners.length; i++) {
-            if (winners[i].bidder != address(0)) {
-                require(ERC20(asset).transfer(winners[i].bidder, winners[i].quantity), "Distribute assets failed");
-            }
-        }
-    }
-
-    function refundLockedFunds() private {
-        for (uint256 i = 0; i < lockedParticipant.length; i++) {
-            address participant = lockedParticipant[i];
-            uint256 refundAmount = lockedFunds[participant];
-            if (refundAmount > 0) {
-                if (paymentToken == address(0)) {
-                    (bool success, ) = participant.call{ value: refundAmount }("");
-                    require(success, "Ether refund failed");
-                } else {
-                    require(ERC20(paymentToken).transfer(participant, refundAmount), "Token refund failed");
-                }
-            }
-        }
-    }
-
-    function refundUnsoldAssets() private {
-        uint256 unsoldAssets = ERC20(asset).balanceOf(address(this));
-        if (unsoldAssets > 0) {
-            require(ERC20(asset).transfer(owner, unsoldAssets), "Refund unsold assets failed");
-        }
-    }
-
     /// @notice Finalize the auction and distribute tokens
     function settleAuction() public onlyOwner auctionEnded {
+        if (settled) revert AuctionAlreadySettled();
         require(!settled, "Auction already settled");
 
         // euint256 remainingQuantity = TFHE.asEuint256(quantity);
@@ -277,21 +289,30 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
             cts,
             this.callbackDecrypted.selector,
             0,
-            block.timestamp + 100,
+            block.timestamp + 2 hours,
             false
         );
         requestIds.push(requestID);
         addParamsAddress(requestID, _bidder);
+        emit DecryptionRequested(requestID, _bidder);
     }
 
     /// @notice Callback function to handle decrypted bid data
     function callbackDecrypted(uint256 requestId, uint256 _quantity, uint256 _price) public onlyGateway {
+        if (isDecrypted[requestId]) revert AlreadyDecrypted();
         address[] memory params = getParamsAddress(requestId);
-        decryptedBids.push(DecryptedBid(params[0], _quantity, _price));
+        if (params.length == 0) revert InvalidParams();
+        address bidder = params[0];
+
+        decryptedBids.push(DecryptedBid(bidder, _quantity, _price));
         isDecrypted[requestId] = true;
-        if (checkAllDecrypted()) {
-            distributeFunds();
-        }
+
+        emit DecryptionCompleted(requestId, bidder, _quantity, _price);
+    }
+
+    function distributeFunds() external onlyOwner auctionEnded {
+        if (!checkAllDecrypted()) revert NotAllDecrypted();
+        internalDistributeFunds();
     }
 
     /// @notice Check if all decryption requests are completed
@@ -308,17 +329,13 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
     /// @notice Lock funds for bidding
     /// @param amount Amount of funds to lock
     function lockFunds(uint256 amount) external payable nonReentrant activeAuction {
-        // Ensure that the user sends enough funds for locking
-        require(amount > 0, "Amount must be greater than zero");
+        if (amount == 0) revert ZeroAmount();
 
-        // Lock Ether
         if (paymentToken == address(0)) {
-            require(msg.value == amount, "Ether amount mismatch");
+            if (msg.value != amount) revert EtherAmountMismatch();
             lockedFunds[msg.sender] += msg.value;
-        }
-        // Lock ERC20 tokens
-        else {
-            require(ERC20(paymentToken).transferFrom(msg.sender, address(this), amount), "ERC20 transfer failed");
+        } else {
+            if (!ERC20(paymentToken).transferFrom(msg.sender, address(this), amount)) revert ERC20TransferFailed();
             lockedFunds[msg.sender] += amount;
         }
         lockedParticipant.push(msg.sender);
@@ -334,6 +351,10 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
     /// @return Array of all decrypted bids
     function getAllDecryptedBids() public view returns (DecryptedBid[] memory) {
         return decryptedBids;
+    }
+
+    function getFinalWinners() public view returns (DecryptedBid[] memory) {
+        return finalWinners;
     }
 
     function isActive() public view returns (bool) {

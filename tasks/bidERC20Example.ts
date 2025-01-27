@@ -23,7 +23,7 @@ task("bid")
     await paymentToken.connect(signers[0]).transfer(signers[3].address, ethers.parseEther("10000"));
     await paymentToken.connect(signers[0]).transfer(signers[4].address, ethers.parseEther("10000"));
 
-    // await bidAuction(0, 2, "1", "30", "50", ethers, paymentToken, privateAuction, signers, fhevm);
-    // await bidAuction(1, 3, "1", "800", "1000", ethers, paymentToken, privateAuction, signers, fhevm);
-    // await bidAuction(2, 4, "3", "80", "250", ethers, paymentToken, privateAuction, signers, fhevm);
+    await bidAuction(0, 2, "1", "30", "50", ethers, paymentToken, privateAuction, signers, fhevm);
+    await bidAuction(1, 3, "1", "800", "1000", ethers, paymentToken, privateAuction, signers, fhevm);
+    await bidAuction(2, 4, "3", "80", "250", ethers, paymentToken, privateAuction, signers, fhevm);
   });

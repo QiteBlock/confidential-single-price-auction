@@ -277,6 +277,7 @@ describe("AuctionFactory and PrivateSinglePriceAuction", function () {
       await ethers.provider.send("evm_mine", []);
       await this.privateAuction.connect(this.signers.fred).settleAuction();
       await awaitAllDecryptionResults();
+      await this.privateAuction.connect(this.signers.fred).distributeFunds();
       expect(await this.privateAuction.settlementPrice()).to.be.equal(ethers.parseEther("1"));
       expect(await this.asset.balanceOf(this.bidder1)).to.be.equal(ethers.parseEther("20"));
       expect(await this.asset.balanceOf(this.bidder4)).to.be.equal(ethers.parseEther("80"));

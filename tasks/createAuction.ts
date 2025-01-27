@@ -4,9 +4,9 @@ import { HardhatRuntimeEnvironment } from "hardhat/types";
 
 import { AuctionFactory, MockERC20 } from "../types";
 
-// Auction Factory Contract 0x47e1Cbd5Df5FdA44AF626d148C2ce11D43909Ae7
-// Asset Token Contract 0x6aC105042b2F5865972CEC83EFF6fE96c9583779
-// Payment Token Contract 0x5d09902624B8DE574EB7632B4CD57B0fB9c7a933
+// Auction Factory Contract 0xe13a2C0cD324aaf9Db5E9FdFDba532Ea7Fa5681c
+// Asset Token Contract 0x21D7A817AC349Bacb8d11A7a8816F0234c04be4a
+// Payment Token Contract 0x364Af1aD133c171EC952C632B3Adcdaed4d7A0B4
 task("createAuction")
   .addParam("auctionFactoryContract", "Auction Factory Contract Address")
   .addParam("assetContract", "Asset Contract Address")
