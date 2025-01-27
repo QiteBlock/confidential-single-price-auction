@@ -59,7 +59,7 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
     error DistributeAssetsFailed(); // Thrown when asset distribution fails
     error EtherRefundFailed(); // Thrown when ETH refund fails
     error RefundAssetsFailed(); // Thrown when asset refund fails
-
+    error NotAllDecrypted(); // Thrown when not all bids are decrypted
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
         _;
@@ -286,7 +286,7 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
             cts,
             this.callbackDecrypted.selector,
             0,
-            block.timestamp + 300,
+            block.timestamp + 1 hours,
             false
         );
         requestIds.push(requestID);
@@ -305,10 +305,11 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
         isDecrypted[requestId] = true;
 
         emit DecryptionCompleted(requestId, bidder, _quantity, _price);
+    }
 
-        if (checkAllDecrypted()) {
-            distributeFunds();
-        }
+    function distributeFunds() external onlyOwner auctionEnded {
+        if (!checkAllDecrypted()) revert NotAllDecrypted();
+        distributeFunds();
     }
 
     /// @notice Check if all decryption requests are completed
