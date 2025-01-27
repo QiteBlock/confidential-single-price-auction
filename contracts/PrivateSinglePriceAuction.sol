@@ -31,6 +31,7 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
 
     EncryptedBid[] public bids; // List of all encrypted bids
     DecryptedBid[] public decryptedBids; // List of all decrypted bids
+    DecryptedBid[] public finalWinners; // List of all winners bids
     uint256[] public requestIds; // List of request IDs for decryption
     uint256 public settlementPrice = 0; // Final settlement price
     mapping(uint256 => bool) public isDecrypted; // Tracks decryption status of bids
@@ -147,13 +148,15 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
 
     /// @notice Distributes funds and assets after auction settlement
     /// @dev Processes winner payments, transfers assets, and handles refunds
-    function distributeFunds() internal nonReentrant {
+    function internalDistributeFunds() internal nonReentrant {
         uint256 totalAmountPaid;
         uint256 decimals = paymentToken == address(0) ? 18 : ERC20(paymentToken).decimals();
 
         // Sort bids and determine winners
         DecryptedBid[] memory winners = allocateWinners(sortBidsByPriceDescending(), quantity);
-
+        for (uint256 i = 0; i < winners.length; i++) {
+            finalWinners.push(winners[i]);
+        }
         // Process payments and distribute assets to winners
         for (uint256 i = 0; i < winners.length; i++) {
             address bidder = winners[i].bidder;
@@ -286,7 +289,7 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
             cts,
             this.callbackDecrypted.selector,
             0,
-            block.timestamp + 1 hours,
+            block.timestamp + 2 hours,
             false
         );
         requestIds.push(requestID);
@@ -309,7 +312,7 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
 
     function distributeFunds() external onlyOwner auctionEnded {
         if (!checkAllDecrypted()) revert NotAllDecrypted();
-        distributeFunds();
+        internalDistributeFunds();
     }
 
     /// @notice Check if all decryption requests are completed
@@ -348,6 +351,10 @@ contract PrivateSinglePriceAuction is SepoliaZamaFHEVMConfig, SepoliaZamaGateway
     /// @return Array of all decrypted bids
     function getAllDecryptedBids() public view returns (DecryptedBid[] memory) {
         return decryptedBids;
+    }
+
+    function getFinalWinners() public view returns (DecryptedBid[] memory) {
+        return finalWinners;
     }
 
     function isActive() public view returns (bool) {

@@ -257,6 +257,7 @@ describe("AuctionFactory and PrivateSinglePriceAuction with ETH", function () {
       let initialBalance = await ethers.provider.getBalance(this.signers.fred.address);
       await this.privateAuction.connect(this.signers.fred).settleAuction();
       await awaitAllDecryptionResults();
+      await this.privateAuction.connect(this.signers.fred).distributeFunds();
       expect(await this.privateAuction.settlementPrice()).to.be.equal(ethers.parseEther("1"));
       expect(await this.asset.balanceOf(this.bidder1)).to.be.equal(ethers.parseEther("20"));
       expect(await this.asset.balanceOf(this.bidder4)).to.be.equal(ethers.parseEther("80"));
@@ -516,6 +517,7 @@ describe("AuctionFactory and PrivateSinglePriceAuction with ETH", function () {
       let initialBalance = await ethers.provider.getBalance(this.signers.fred.address);
       await this.privateAuction.connect(this.signers.fred).settleAuction();
       await awaitAllDecryptionResults();
+      await this.privateAuction.connect(this.signers.fred).distributeFunds();
       expect(await this.privateAuction.settlementPrice()).to.be.equal(ethers.parseEther("0.000002"));
       expect(await this.asset.balanceOf(this.bidder1)).to.be.equal(ethers.parseEther("400000"));
       expect(await this.asset.balanceOf(this.bidder3)).to.be.equal(ethers.parseEther("600000"));
