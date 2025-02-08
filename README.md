@@ -4,6 +4,11 @@ The **PrivateSinglePriceAuction** contract is a decentralized auction mechanism 
 
 ---
 
+## Frontend Repository
+
+A front end is also available on this link :
+https://github.com/QiteBlock/confidential-single-price-auction-frontend
+
 ## Features
 
 ### AuctionFactory
